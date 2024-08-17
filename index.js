@@ -31,37 +31,37 @@ async function run() {
         // Get the collection
         const productsCollection = client.db("productsDB").collection('products');
 
-        // Get products with pagination, sorting, and filtering
+        
         app.get('/product', async (req, res) => {
             try {
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 10;
                 const skip = (page - 1) * limit;
                 const searchQuery = req.query.search || '';
-                const sortBy = req.query.sort || 'price_asc'; // Default sorting
+                const sortBy = req.query.sort || 'price_asc'; 
                 const brandFilter = req.query.brand || '';
                 const categoryFilter = req.query.category || '';
                 const priceFilter = req.query.price || '';
 
-                const searchRegex = new RegExp(searchQuery, 'i'); // Case-insensitive search
+                const searchRegex = new RegExp(searchQuery, 'i'); 
 
                 // Determine sort order
                 let sortOptions = {};
                 if (sortBy === 'price_asc') {
-                    sortOptions = { price_range: 1 }; // Sort by price ascending
+                    sortOptions = { price_range: 1 };
                 } else if (sortBy === 'price_desc') {
-                    sortOptions = { price_range: -1 }; // Sort by price descending
+                    sortOptions = { price_range: -1 }; 
                 } else if (sortBy === 'date_asc') {
-                    sortOptions = { date: 1 }; // Sort by date ascending
+                    sortOptions = { date: 1 };
                 } else if (sortBy === 'date_desc') {
-                    sortOptions = { date: -1 }; // Sort by date descending
+                    sortOptions = { date: -1 }; 
                 } else {
                     return res.status(400).send({ error: "Invalid sort option" });
                 }
 
                 console.log(`Fetching products with sort: ${JSON.stringify(sortOptions)}`);
 
-                // Build filter criteria
+               
                 let filterCriteria = { title: searchRegex };
                 if (brandFilter) {
                     filterCriteria.brand_name = brandFilter;
@@ -77,11 +77,11 @@ async function run() {
                     };
                 }
 
-                // Fetch products with sorting, pagination, and filtering
+            
                 const cursor = productsCollection.find(filterCriteria).sort(sortOptions).skip(skip).limit(limit);
                 const result = await cursor.toArray();
 
-                // Get total count of matching products
+                
                 const totalProducts = await productsCollection.countDocuments(filterCriteria);
                 const totalPages = Math.ceil(totalProducts / limit);
 
