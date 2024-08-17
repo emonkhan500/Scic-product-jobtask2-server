@@ -23,16 +23,19 @@ async function run() {
     try {
         const productsCollection = client.db("productsDB").collection('products');
 
-        // Get products with pagination
+        // Get products with pagination and search
         app.get('/product', async (req, res) => {
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const skip = (page - 1) * limit;
+            const searchQuery = req.query.search || '';
 
-            const cursor = productsCollection.find().skip(skip).limit(limit);
+            const searchRegex = new RegExp(searchQuery, 'i'); // Case-insensitive search
+
+            const cursor = productsCollection.find({ title: searchRegex }).skip(skip).limit(limit);
             const result = await cursor.toArray();
 
-            const totalProducts = await productsCollection.countDocuments();
+            const totalProducts = await productsCollection.countDocuments({ title: searchRegex });
             const totalPages = Math.ceil(totalProducts / limit);
 
             res.send({
