@@ -9,8 +9,10 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// MongoDB connection URI
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.hzfjxhp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
+// Create a MongoDB client
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
@@ -19,46 +21,83 @@ const client = new MongoClient(uri, {
     }
 });
 
+// Connect to MongoDB and set up routes
 async function run() {
     try {
+        // Connect to the MongoDB cluster
+        await client.connect();
+        console.log("Successfully connected to MongoDB!");
+
+        // Get the collection
         const productsCollection = client.db("productsDB").collection('products');
 
-        // Get products with pagination and search
+        // Get products with pagination and sorting
         app.get('/product', async (req, res) => {
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 10;
-            const skip = (page - 1) * limit;
-            const searchQuery = req.query.search || '';
+            try {
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 10;
+                const skip = (page - 1) * limit;
+                const searchQuery = req.query.search || '';
+                const sortBy = req.query.sort || 'price_asc'; // Default sorting
 
-            const searchRegex = new RegExp(searchQuery, 'i'); // Case-insensitive search
+                const searchRegex = new RegExp(searchQuery, 'i'); // Case-insensitive search
 
-            const cursor = productsCollection.find({ title: searchRegex }).skip(skip).limit(limit);
-            const result = await cursor.toArray();
+                // Determine sort order
+                let sortOptions = {};
+                if (sortBy === 'price_asc') {
+                    sortOptions = { price_range: 1 }; // Sort by price_range string might not work directly
+                } else if (sortBy === 'price_desc') {
+                    sortOptions = { price_range: -1 };
+                } else if (sortBy === 'date_asc') {
+                    sortOptions = { date: 1 }; // Use date field directly
+                } else if (sortBy === 'date_desc') {
+                    sortOptions = { date: -1 };
+                } else {
+                    return res.status(400).send({ error: "Invalid sort option" });
+                }
 
-            const totalProducts = await productsCollection.countDocuments({ title: searchRegex });
-            const totalPages = Math.ceil(totalProducts / limit);
+                console.log(`Fetching products with sort: ${JSON.stringify(sortOptions)}`);
 
-            res.send({
-                totalProducts,
-                totalPages,
-                currentPage: page,
-                products: result
-            });
+                // Convert date string to ISODate
+                const convertDateToISO = (dateStr) => new Date(dateStr);
+
+                // Fetch products with sorting, pagination, and search
+                const cursor = productsCollection.find({ title: searchRegex }).sort(sortOptions).skip(skip).limit(limit);
+                const result = await cursor.toArray();
+
+                // Get total count of matching products
+                const totalProducts = await productsCollection.countDocuments({ title: searchRegex });
+                const totalPages = Math.ceil(totalProducts / limit);
+
+                res.send({
+                    totalProducts,
+                    totalPages,
+                    currentPage: page,
+                    products: result
+                });
+            } catch (error) {
+                res.status(500).send({ error: "Error fetching products" });
+                console.error("Error fetching products:", error);
+            }
         });
 
+        // Test the connection
         await client.db("admin").command({ ping: 1 });
-        console.log("Successfully connected to MongoDB!");
     } finally {
         // Ensure the client closes when you finish/error
+        // Uncomment the following line if you want the client to close on server stop
         // await client.close();
     }
 }
+
 run().catch(console.dir);
 
+// Basic route
 app.get('/', (req, res) => {
     res.send('Assignment server is running');
 });
 
+// Start the server
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
