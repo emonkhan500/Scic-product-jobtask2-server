@@ -31,7 +31,7 @@ async function run() {
         // Get the collection
         const productsCollection = client.db("productsDB").collection('products');
 
-        // Get products with pagination and sorting
+        // Get products with pagination, sorting, and filtering
         app.get('/product', async (req, res) => {
             try {
                 const page = parseInt(req.query.page) || 1;
@@ -39,34 +39,50 @@ async function run() {
                 const skip = (page - 1) * limit;
                 const searchQuery = req.query.search || '';
                 const sortBy = req.query.sort || 'price_asc'; // Default sorting
+                const brandFilter = req.query.brand || '';
+                const categoryFilter = req.query.category || '';
+                const priceFilter = req.query.price || '';
 
                 const searchRegex = new RegExp(searchQuery, 'i'); // Case-insensitive search
 
                 // Determine sort order
                 let sortOptions = {};
                 if (sortBy === 'price_asc') {
-                    sortOptions = { price_range: 1 }; // Sort by price_range string might not work directly
+                    sortOptions = { price_range: 1 }; // Sort by price ascending
                 } else if (sortBy === 'price_desc') {
-                    sortOptions = { price_range: -1 };
+                    sortOptions = { price_range: -1 }; // Sort by price descending
                 } else if (sortBy === 'date_asc') {
-                    sortOptions = { date: 1 }; // Use date field directly
+                    sortOptions = { date: 1 }; // Sort by date ascending
                 } else if (sortBy === 'date_desc') {
-                    sortOptions = { date: -1 };
+                    sortOptions = { date: -1 }; // Sort by date descending
                 } else {
                     return res.status(400).send({ error: "Invalid sort option" });
                 }
 
                 console.log(`Fetching products with sort: ${JSON.stringify(sortOptions)}`);
 
-                // Convert date string to ISODate
-                const convertDateToISO = (dateStr) => new Date(dateStr);
+                // Build filter criteria
+                let filterCriteria = { title: searchRegex };
+                if (brandFilter) {
+                    filterCriteria.brand_name = brandFilter;
+                }
+                if (categoryFilter) {
+                    filterCriteria.category_name = categoryFilter;
+                }
+                if (priceFilter) {
+                    const [minPrice, maxPrice] = priceFilter.split('-').map(Number);
+                    filterCriteria.price_range = {
+                        $gte: minPrice,
+                        $lte: maxPrice
+                    };
+                }
 
-                // Fetch products with sorting, pagination, and search
-                const cursor = productsCollection.find({ title: searchRegex }).sort(sortOptions).skip(skip).limit(limit);
+                // Fetch products with sorting, pagination, and filtering
+                const cursor = productsCollection.find(filterCriteria).sort(sortOptions).skip(skip).limit(limit);
                 const result = await cursor.toArray();
 
                 // Get total count of matching products
-                const totalProducts = await productsCollection.countDocuments({ title: searchRegex });
+                const totalProducts = await productsCollection.countDocuments(filterCriteria);
                 const totalPages = Math.ceil(totalProducts / limit);
 
                 res.send({
